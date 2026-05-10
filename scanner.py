@@ -73,8 +73,11 @@ def run_scanner():
         print(f"  15M candles : {len(df_15m)}")
 
         # Generate signals
-        signals_df = generate_signals(df_1h)
-
+        signals_df = generate_signals(
+        df_1h,
+        trend_aligned=True,
+        params=params
+        )
         # Latest signal
         latest = signals_df.iloc[-1]
 
