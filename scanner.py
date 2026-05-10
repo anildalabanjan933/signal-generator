@@ -2,14 +2,14 @@
 # scanner.py - Multi-coin scanner loop
 # =====================================================
 
-from data_fetcher import fetch_candles_by_days          # FIX 1: use fetch_candles_by_days
-from indicators import add_all_indicators               # FIX 2: correct function name
-from signal_engine import scan_all_symbols              # FIX 3: use actual exported function
+from data_fetcher import fetch_candles_by_days
+from indicators import add_all_indicators
+from signal_engine import generate_signals
 from config import SYMBOLS, BACKTEST_DAYS
 import config
 
 
-# FIX 4: Temporary stub until webhook_sender.py is built
+# Temporary stub until webhook_sender.py is built
 def send_signal(symbol, signal_result):
     if signal_result.get("signal") in ("BUY", "SELL"):
         print(f"  [WEBHOOK] {symbol} -> {signal_result['signal']} (pending webhook_sender.py)")
@@ -49,24 +49,27 @@ def run_scanner():
         print(f"\n  Scanning: {symbol}")
         print("  " + "-" * 40)
 
-        # Fetch all timeframes with correct function and days from config
-        df_4h  = add_all_indicators(fetch_candles_by_days(symbol, "4h",  days=BACKTEST_DAYS), params)
-        df_1h  = add_all_indicators(fetch_candles_by_days(symbol, "1h",  days=BACKTEST_DAYS), params)
-        df_15m = add_all_indicators(fetch_candles_by_days(symbol, "15m", days=BACKTEST_DAYS), params)
-
-        # Run signal scan via signal_engine
-        results = scan_all_symbols(
-            symbols=[symbol],
-            trend_tf="4h",
-            trigger_tf="1h",
-            params=params
+        # Fetch all timeframes
+        df_4h  = add_all_indicators(
+            fetch_candles_by_days(symbol, "4h", days=BACKTEST_DAYS),
+            params
         )
 
-        for result in results:
-            print(f"  Signal    : {result.get('signal', 'NONE')}")
-            print(f"  Direction : {result.get('direction', '-')}")
-            print(f"  Filters   : {result.get('filters_passed', '-')}")
-            send_signal(symbol, result)
+        df_1h = add_all_indicators(
+            fetch_candles_by_days(symbol, "1h", days=BACKTEST_DAYS),
+            params
+        )
+
+        df_15m = add_all_indicators(
+            fetch_candles_by_days(symbol, "15m", days=BACKTEST_DAYS),
+            params
+        )
+
+        # Temporary scanner placeholder
+        print("  Scanner running...")
+        print(f"  4H candles  : {len(df_4h)}")
+        print(f"  1H candles  : {len(df_1h)}")
+        print(f"  15M candles : {len(df_15m)}")
 
     print("\n" + "=" * 55)
     print("  SCAN COMPLETE")
