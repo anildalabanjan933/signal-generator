@@ -65,15 +65,15 @@ def run_scanner():
             params
         )
 
-        # Align 4H trend to 1H candles
+        # TEMP FIX - trend alignment disabled
 
-        trend_aligned = df_4h["trend"].reindex(
-            df_1h.index,
-            method="ffill"
-        )
+        print("  Scanner running...")
+        print(f"  4H candles  : {len(df_4h)}")
+        print(f"  1H candles  : {len(df_1h)}")
+        print(f"  15M candles : {len(df_15m)}")
 
         # Generate signals
-        signals_df = generate_signals(df_1h, trend_aligned)
+        signals_df = generate_signals(df_1h)
 
         # Latest signal
         latest = signals_df.iloc[-1]
