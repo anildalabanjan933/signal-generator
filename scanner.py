@@ -65,11 +65,25 @@ def run_scanner():
             params
         )
 
-        # Temporary scanner placeholder
-        print("  Scanner running...")
-        print(f"  4H candles  : {len(df_4h)}")
-        print(f"  1H candles  : {len(df_1h)}")
-        print(f"  15M candles : {len(df_15m)}")
+        # Align 4H trend to 1H candles
+
+        trend_aligned = df_4h["trend"].reindex(
+            df_1h.index,
+            method="ffill"
+        )
+
+        # Generate signals
+        signals_df = generate_signals(df_1h, trend_aligned)
+
+        # Latest signal
+        latest = signals_df.iloc[-1]
+
+        signal = latest.get("signal")
+
+        if signal:
+            print(f"  SIGNAL : {symbol} -> {signal.upper()}")
+        else:
+            print(f"  SIGNAL : {symbol} -> NO SIGNAL")
 
     print("\n" + "=" * 55)
     print("  SCAN COMPLETE")
