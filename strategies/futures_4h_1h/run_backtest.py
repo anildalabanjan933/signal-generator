@@ -12,14 +12,18 @@
 #   4. Prints yearly/monthly PnL reports
 #   5. Saves equity curve PNGs and trade CSVs to ./results/
 # =====================================================
-
 import argparse
 import os
 import sys
 
-import config
-from backtest_engine import run_backtest_all_symbols
+# Add project root to Python path
+sys.path.insert(
+    0,
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+)
 
+from strategies.futures_4h_1h import config
+from strategies.futures_4h_1h.backtest import run_backtest_all_symbols
 
 # ─────────────────────────────────────────────
 # YEARLY REPORT
@@ -120,17 +124,15 @@ def run_swing(symbols: list) -> None:
     print_monthly_report(metrics_list)
 
     # Final portfolio summary
-    total_usd    = sum(m.get("total_pnl_usd", 0) for m in metrics_list)
-    total_inr    = sum(m.get("total_pnl_inr", 0) for m in metrics_list)
-    total_trades = sum(m.get("total_trades",  0) for m in metrics_list)
+    total_pnl_pct = sum(m.get("total_pnl_pct_net", 0) for m in metrics_list)
+    total_trades  = sum(m.get("total_trades", 0) for m in metrics_list)
 
     print(f"\n{'='*80}")
     print(f"  PORTFOLIO TOTAL")
     print(f"{'='*80}")
-    print(f"  Total Trades : {total_trades}")
-    print(f"  Total PnL    : ${total_usd:>12,.2f}  |  Rs.{total_inr:>12,.2f}")
+    print(f"  Total Trades     : {total_trades}")
+    print(f"  Total Net PnL %  : {total_pnl_pct:>10.2f}%")
     print(f"{'='*80}\n")
-
 
 # ─────────────────────────────────────────────
 # MAIN

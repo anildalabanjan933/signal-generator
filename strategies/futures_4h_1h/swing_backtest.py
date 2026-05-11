@@ -11,9 +11,7 @@
 #   - PF, Max DD, Win Rate, Trade Count
 # =================================================
 
-import time
 import warnings
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -30,10 +28,10 @@ from config import (
     SUPERTREND_ATR_PERIOD, SUPERTREND_MULTIPLIER,
     COMMISSION_MODE
 )
-from data_fetcher  import fetch_candles_by_days
-from indicators    import add_indicators
-from filters       import get_4h_trend, align_4h_trend_to_1h
-from signal_engine import generate_signals
+from core.data_fetcher import fetch_candles_by_days
+from core.indicators import add_indicators
+from core.filters import get_4h_trend, align_4h_trend_to_1h
+from strategy import generate_signals
 
 # -------------------------------------------------
 # INDICATOR CONFIG DICT (passed to add_indicators)
@@ -514,7 +512,7 @@ def plot_equity_curves(results: dict) -> None:
 # =================================================
 def main():
     import os
-    os.makedirs("results", exist_ok=True)
+    os.makedirs("../../results", exist_ok=True)
 
     print("\n" + "="*55)
     print("  MTF SWING BACKTEST - Delta Exchange")

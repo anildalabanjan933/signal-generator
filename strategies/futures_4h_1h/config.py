@@ -93,7 +93,10 @@ BASE_URL = "https://api.india.delta.exchange"
 # --- Coins to scan ---
 SYMBOLS = [
     "BTCUSD",
-    "ETHUSD"
+    "ETHUSD",
+    "SOLUSD",
+    "BNBUSD",
+    "DOGEUSD",
 ]
 
 # ============================================================
@@ -313,17 +316,24 @@ TRAILING_ATR_MULTIPLIER = 4.0
 #     backtest_engine must raise ValueError if None is received.
 # ============================================================
 LOT_SIZES = {
-    "BTCUSD": 100,   # 100 lots = 0.1 BTC per trade
-    "ETHUSD": 100,   # 100 lots = 1.0 ETH per trade
+    "BTCUSD": 100,
+    "ETHUSD": 100,
+    "SOLUSD": 10,
+    "BNBUSD": 1,
+    "AVAXUSD": 10,
+    "DOGEUSD": 1000,
 }
 
 # Contract value per lot — used for USD PnL calculation
 # Verified from Delta Exchange API (May 2026)
 CONTRACT_VALUES = {
-    "BTCUSD": 0.001,   # BTC per lot
-    "ETHUSD": 0.01,    # ETH per lot
+    "BTCUSD": 0.001,
+    "ETHUSD": 0.01,
+    "SOLUSD": 1,
+    "BNBUSD": 0.01,
+    "AVAXUSD": 1,
+    "DOGEUSD": 100,
 }
-
 # ============================================================
 # FEE SETTINGS
 # FIX7: TAKER_FEE_PCT corrected from 0.05 to 0.0005.
@@ -397,10 +407,31 @@ SAVE_RESULTS_CSV = True
 RESULTS_FOLDER   = "results"
 
 # ============================================================
-# WEBHOOK SETTINGS
+# ALGOTEST WEBHOOKS
 # ============================================================
-WEBHOOK_URL    = "YOUR_WEBHOOK_URL_HERE"
-WEBHOOK_SECRET = "YOUR_SECRET_HERE"
+
+BTC_LONG_ENTRY_WEBHOOK = "https://api.algotest.in/webhook/custom/execution/start/6a009c61f85d2617ff7e2126"
+BTC_LONG_EXIT_WEBHOOK  = "https://api.algotest.in/webhook/custom/execution/square_off/6a009c61f85d2617ff7e2126"
+
+BTC_SHORT_ENTRY_WEBHOOK = "https://api.algotest.in/webhook/custom/execution/start/6a009ec8053920297050fcc6"
+BTC_SHORT_EXIT_WEBHOOK  = "https://api.algotest.in/webhook/custom/execution/square_off/6a009ec8053920297050fcc6"
+
+
+# ============================================================
+# ALGOTEST JSON PAYLOADS
+# ============================================================
+
+BTC_LONG_ENTRY_PAYLOAD = {"access_token":"n7FJcMHANHN4F8HdqbU5QMDJn5JO79K9","alert_name":"Future buy python signal_Custom"}
+
+
+
+BTC_LONG_EXIT_PAYLOAD = {"access_token":"n7FJcMHANHN4F8HdqbU5QMDJn5JO79K9","alert_name":"Future buy python signal_Custom"}
+
+
+
+BTC_SHORT_ENTRY_PAYLOAD = {"access_token":"n7FJcMHANHN4F8HdqbU5QMDJn5JO79K9","alert_name":"BTC-FUT -PYTN-SELL 4H 1H_Custom"}
+
+BTC_SHORT_EXIT_PAYLOAD = {"access_token":"n7FJcMHANHN4F8HdqbU5QMDJn5JO79K9","alert_name":"BTC-FUT -PYTN-SELL 4H 1H_Custom"}
 
 # ============================================================
 # FIX5 + FIX10 + C1-C7: build_params()

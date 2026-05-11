@@ -26,8 +26,8 @@ import pandas as pd
 from datetime import datetime
 from copy import deepcopy
 
-from data_fetcher import fetch_mtf_candles
-from backtest_engine import (
+from core.data_fetcher import fetch_mtf_candles
+from backtest import (
     run_backtest,
     calculate_metrics,
     calculate_periodic_pnl,
@@ -39,7 +39,7 @@ import config
 # ─────────────────────────────────────────────
 # CONSTANTS
 # ─────────────────────────────────────────────
-RESULTS_DIR = "./results"
+RESULTS_DIR = "../../results"
 
 
 # ─────────────────────────────────────────────

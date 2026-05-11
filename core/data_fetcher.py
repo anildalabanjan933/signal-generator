@@ -429,9 +429,9 @@ def fetch_mtf_candles(
 ) -> dict:
     """
     Fix #9: Fetch both trend (4H) and entry (1H) candles for MTF strategy
-    in a single call. Keeps backtest_engine.py clean.
+    in a single call. Keeps backtest.py clean.
 
-    Usage in backtest_engine.py:
+    Usage in backtest.py:
         data   = fetch_mtf_candles("BTCUSD", days=730)
         df_4h  = data["trend"]
         df_1h  = data["entry"]

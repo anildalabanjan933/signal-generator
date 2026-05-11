@@ -49,7 +49,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from datetime import datetime
 
-RESULTS_DIR = "./results"
+RESULTS_DIR = "../../results"
 
 
 # ─────────────────────────────────────────────

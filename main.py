@@ -5,7 +5,7 @@
 import schedule
 import time
 from scanner import run_scanner
-from config import SCAN_INTERVAL_SECONDS
+from strategies.futures_4h_1h.config import SCAN_INTERVAL_SECONDS
 
 print("=" * 55)
 print("  SIGNAL GENERATOR STARTED")

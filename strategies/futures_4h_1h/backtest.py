@@ -27,7 +27,14 @@
 #   BUG7 - Double underscore in filename when label=""
 # =====================================================
 
+import sys
 import os
+
+# ── Path fix: allow imports from project root ─────────────────────
+# This file lives at strategies/futures_4h_1h/backtest.py
+# Root is two levels up
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
 import math
 import pandas as pd
 import numpy as np
@@ -37,15 +44,21 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime
 
-from data_fetcher import fetch_candles_by_days
-import config
-from indicators import add_all_indicators
+# ── Fixed imports after restructuring ────────────────────────────
+# data_fetcher.py  →  core/data_fetcher.py
+# indicators.py    →  core/indicators.py
+# config.py        →  strategies/futures_4h_1h/config.py
+from core.data_fetcher import fetch_candles_by_days
+from strategies.futures_4h_1h import config
+from core.indicators import add_all_indicators
 
 
 # ─────────────────────────────────────────────
 # CONSTANTS
 # ─────────────────────────────────────────────
-RESULTS_DIR = "./results"
+
+# Results saved inside the strategy folder, not project root
+RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results")
 EXIT_MODES  = ("opposite_signal", "atr_sl_tp", "trailing_stop")
 
 # How close price must be to EMA200 to qualify as a
@@ -91,7 +104,7 @@ def _make_filename(prefix: str, symbol: str, label: str, ext: str) -> str:
     """Build a clean result filename with no double underscore."""
     label_part = f"_{label}" if label else ""
     ts = _timestamp_str()
-    return f"{RESULTS_DIR}/{prefix}_{symbol}{label_part}_{ts}.{ext}"
+    return os.path.join(RESULTS_DIR, f"{prefix}_{symbol}{label_part}_{ts}.{ext}")
 
 
 def _supertrend_is_bullish(val) -> bool:
@@ -256,6 +269,7 @@ def _trigger_sell(
         and _rsi_crossed_below_50(prev_row, curr_row)
     )
 
+
 # ─────────────────────────────────────────────
 # EXIT LOGIC
 # ─────────────────────────────────────────────
@@ -286,7 +300,6 @@ def _passes_filters(row: pd.Series, params: dict) -> bool:
     # ── 1. Choppiness filter ──────────────────────────────────────
     if params.get("use_choppiness_filter", True):
         chop_threshold = params.get("choppiness_threshold", 61.8)
-        # Use trend TF choppiness for market regime filter
         choppiness = _safe_float(row.get("choppiness_trend", row.get("choppiness", 0)))
         is_choppy  = bool(row.get("is_choppy_trend", row.get("is_choppy", False)))
         if is_choppy or choppiness > chop_threshold:
@@ -476,7 +489,7 @@ def _build_merged_df(
 ) -> pd.DataFrame:
     """
     Merge trend TF indicators onto trigger TF candles using
-    merge_asof (backward fill — zero lookahead).
+    merge_asof (backward fill - zero lookahead).
 
     After merge, ALL columns are suffixed _trend or _trigger.
     Signal functions read explicitly suffixed columns so there
@@ -490,16 +503,15 @@ def _build_merged_df(
     df_trend["datetime"]   = pd.to_datetime(df_trend["datetime"])
     df_trigger["datetime"] = pd.to_datetime(df_trigger["datetime"])
 
-    # Columns to carry from trend TF
     trend_indicator_cols = [
-    "ema50",
-    "ema200",
-    "adx",
-    "rsi",
-    "supertrend_signal",
-    "choppiness",
-    "is_choppy",
-    "atr",
+        "ema50",
+        "ema200",
+        "adx",
+        "rsi",
+        "supertrend_signal",
+        "choppiness",
+        "is_choppy",
+        "atr",
     ]
     trend_cols = ["datetime"] + [
         c for c in trend_indicator_cols if c in df_trend.columns
@@ -569,9 +581,9 @@ def run_backtest(
     """
     Row-by-row backtest implementing the swing system:
 
-      4H trend filter  →  EMA50/200 + Supertrend + ADX
-      1H entry trigger →  EMA50/200 alignment + near EMA200 + RSI cross 50
-      Exit             →  Supertrend flip on 1H
+      4H trend filter  ->  EMA50/200 + Supertrend + ADX
+      1H entry trigger ->  EMA50/200 alignment + near EMA200 + RSI cross 50
+      Exit             ->  Supertrend flip on 1H
 
     Args:
         symbol     : e.g. 'BTCUSD'
@@ -601,16 +613,12 @@ def run_backtest(
         return []
 
     # ── Drop warmup NaN rows ──────────────────────────────────────
-    # EMA200 has the longest warmup period (200 bars).
-    # Drop any row where either TF EMA200 is NaN.
-    # Also require rsi_trigger and atr_trigger to be valid.
     warmup_cols = [
         "ema50_trend", "ema200_trend",
         "ema50_trigger", "ema200_trigger",
         "rsi_trigger", "atr_trigger",
         "adx_trend",
     ]
-    # Only drop on columns that actually exist
     warmup_cols_present = [c for c in warmup_cols if c in df_merged.columns]
     df_merged = df_merged.dropna(
         subset=warmup_cols_present
@@ -640,7 +648,6 @@ def run_backtest(
     open_trade = None
 
     # ── Row-by-row replay ─────────────────────────────────────────
-    # Start at index 1 so we always have a previous row for RSI cross.
     for idx in range(1, len(df_merged)):
 
         curr_row  = df_merged.iloc[idx]
@@ -657,7 +664,6 @@ def run_backtest(
         if open_trade is not None:
 
             if exit_mode == "opposite_signal":
-                # Supertrend flip exit
                 if _exit_signal(open_trade.side, curr_row):
                     open_trade.close(close, timestamp, "supertrend_flip")
                     trades.append(open_trade)
@@ -709,7 +715,6 @@ def run_backtest(
             if (signal == "BUY"  and open_trade.side == "BUY") or \
                (signal == "SELL" and open_trade.side == "SELL"):
                 continue
-            # Opposite direction: close existing first
             open_trade.close(close, timestamp, "opposite_signal")
             trades.append(open_trade)
             open_trade = None
@@ -851,15 +856,15 @@ def save_equity_curve(
     symbol: str,
     label: str = ""
 ) -> str:
-    """Save equity curve PNG to ./results/. Returns file path."""
+    """Save equity curve PNG to strategy results folder. Returns file path."""
     _ensure_results_dir()
 
     closed = [t for t in trades if not t.is_open()]
     if not closed:
         return ""
 
-    times     = [t.exit_time   for t in closed]
-    pnl_net   = [t.pnl_pct_net for t in closed]
+    times      = [t.exit_time   for t in closed]
+    pnl_net    = [t.pnl_pct_net for t in closed]
     equity_net = list(np.cumsum(pnl_net))
 
     fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
@@ -933,7 +938,7 @@ def save_metrics_csv(metrics_list: list, label: str = "") -> str:
     df = pd.DataFrame(metrics_list)
     label_part = f"_{label}" if label else ""
     ts       = _timestamp_str()
-    filename = f"{RESULTS_DIR}/summary{label_part}_{ts}.csv"
+    filename = os.path.join(RESULTS_DIR, f"summary{label_part}_{ts}.csv")
     df.to_csv(filename, index=False)
     return filename
 
@@ -1004,54 +1009,37 @@ def run_backtest_all_symbols(
     all_metrics = []
 
     empty_metrics = {
-        "win_rate_pct": 0,
-        "profit_factor": 0,
-        "total_pnl_pct": 0,
-        "total_pnl_pct_net": 0,
-        "max_drawdown_pct": 0,
-        "avg_win_pct": 0,
-        "avg_loss_pct": 0,
-        "best_trade_pct": 0,
-        "worst_trade_pct": 0,
-        "avg_trade_pct": 0,
-        "total_trades_buy": 0,
-        "total_trades_sell": 0,
-        "win_streak_max": 0,
-        "loss_streak_max": 0,
+        "win_rate_pct"      : 0,
+        "profit_factor"     : 0,
+        "total_pnl_pct"     : 0,
+        "total_pnl_pct_net" : 0,
+        "max_drawdown_pct"  : 0,
+        "avg_win_pct"       : 0,
+        "avg_loss_pct"      : 0,
+        "best_trade_pct"    : 0,
+        "worst_trade_pct"   : 0,
+        "avg_trade_pct"     : 0,
+        "total_trades_buy"  : 0,
+        "total_trades_sell" : 0,
+        "win_streak_max"    : 0,
+        "loss_streak_max"   : 0,
     }
 
     for symbol in symbols:
 
-        # =====================================================
-        # GET SYMBOL PARAMS
-        # =====================================================
-        params = params_map[symbol]
-
-        trend_tf = params.get("trend_tf", "4h")
+        params     = params_map[symbol]
+        trend_tf   = params.get("trend_tf",   "4h")
         trigger_tf = params.get("trigger_tf", "1h")
-
-        days = params.get(
+        days       = params.get(
             "backtest_days",
             getattr(config, "BACKTEST_DAYS", 365)
         )
 
-        print(
-            f"\n  [BACKTEST] Processing {symbol} ..."
-        )
+        print(f"\n  [BACKTEST] Processing {symbol} ...")
 
         try:
-
-            df_trend = fetch_candles_by_days(
-                symbol,
-                trend_tf,
-                days=days
-            )
-
-            df_trigger = fetch_candles_by_days(
-                symbol,
-                trigger_tf,
-                days=days
-            )
+            df_trend = fetch_candles_by_days(symbol, trend_tf,   days=days)
+            df_trigger = fetch_candles_by_days(symbol, trigger_tf, days=days)
 
             if df_trend.empty or df_trigger.empty:
                 print(f"  SKIP {symbol} (no data)")
@@ -1060,31 +1048,15 @@ def run_backtest_all_symbols(
                 )
                 continue
 
-            trades = run_backtest(
-                symbol,
-                df_trend,
-                df_trigger,
-                params
-            )
-
+            trades  = run_backtest(symbol, df_trend, df_trigger, params)
             metrics = calculate_metrics(trades, symbol)
-
             all_metrics.append(metrics)
 
-            trades_path = save_trades_csv(
-                trades,
-                symbol,
-                label
-            )
-
-            chart_path = save_equity_curve(
-                trades,
-                symbol,
-                label
-            )
+            trades_path = save_trades_csv(trades, symbol, label)
+            chart_path  = save_equity_curve(trades, symbol, label)
 
             print(
-                f"OK | trades={metrics['total_trades']} "
+                f"  OK | trades={metrics['total_trades']} "
                 f"win={metrics['win_rate_pct']:.1f}% "
                 f"PF={metrics['profit_factor']:.2f} "
                 f"net={metrics['total_pnl_pct_net']:.2f}%"
@@ -1092,20 +1064,16 @@ def run_backtest_all_symbols(
 
             if trades_path:
                 print(f"     trades CSV : {trades_path}")
-
             if chart_path:
                 print(f"     chart PNG  : {chart_path}")
 
         except Exception as e:
-
             print(f"  ERROR {symbol}: {e}")
-
             all_metrics.append(
                 {"symbol": symbol, "total_trades": 0, **empty_metrics}
             )
 
     summary_path = save_metrics_csv(all_metrics, label)
-
     print_backtest_report(all_metrics)
 
     if summary_path:

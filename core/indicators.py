@@ -46,7 +46,7 @@
 #         Previous docstring incorrectly stated they were the same.
 #
 #   I4  - add_indicators() renamed to add_all_indicators().
-#         backtest_engine.py calls add_all_indicators() but the
+#         backtest.py calls add_all_indicators() but the
 #         function was named add_indicators() — NameError at runtime.
 #
 #   I5  - ema50 / ema200 column names added as aliases.
@@ -54,8 +54,8 @@
 #         ema50 and ema200 from each TF DataFrame before merge.
 #         add_all_indicators() was writing ema_fast / ema_slow only.
 #         Both sets of names now written so merge suffixing works:
-#           ema_fast  → kept for signal_engine.py compatibility
-#           ema_slow  → kept for signal_engine.py compatibility
+#           ema_fast  → kept for strategy.py compatibility
+#           ema_slow  → kept for strategy.py compatibility
 #           ema50     → required by _build_merged_df() / _trend_is_bullish()
 #           ema200    → required by _build_merged_df() / _trend_is_bearish()
 #
@@ -294,7 +294,7 @@ def add_all_indicators(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     Add all required indicators to a candle DataFrame.
 
     I4: Renamed from add_indicators() to add_all_indicators()
-        to match the call in backtest_engine.py.
+        to match the call in backtest.py.
 
     I5: ema50 / ema200 aliases added alongside ema_fast / ema_slow.
         backtest_engine._build_merged_df() expects ema50 and ema200
