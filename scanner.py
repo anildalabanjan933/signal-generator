@@ -77,7 +77,6 @@ def run_scanner():
         signals_df = generate_signals(
             df_1h,
             trend_aligned=True,
-            params=params
         )
 
         # =========================================
