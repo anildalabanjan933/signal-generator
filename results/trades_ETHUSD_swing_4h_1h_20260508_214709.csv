@@ -1,9 +1,0 @@
-symbol,side,system,trend_tf,trigger_tf,entry_time,entry_price,exit_time,exit_price,exit_reason,pnl_points,pnl_pct,pnl_pct_net,lot_size,fee_pct_rt
-ETHUSD,SELL,backtest_mtf,4h,1h,2026-02-08 04:00:00+00:00,2086.85,2026-02-09 17:00:00+00:00,2126.95,opposite_signal,-40.1,-1.9216,-2.0216,1,0.1
-ETHUSD,BUY,backtest_mtf,4h,1h,2026-02-09 17:00:00+00:00,2126.95,2026-02-10 20:00:00+00:00,2010.3,opposite_signal,-116.65,-5.4844,-5.5844,1,0.1
-ETHUSD,SELL,backtest_mtf,4h,1h,2026-02-10 20:00:00+00:00,2010.3,2026-03-05 08:00:00+00:00,2117.05,opposite_signal,-106.75,-5.3102,-5.4102,1,0.1
-ETHUSD,BUY,backtest_mtf,4h,1h,2026-03-05 08:00:00+00:00,2117.05,2026-03-08 12:00:00+00:00,1945.65,opposite_signal,-171.4,-8.0962,-8.1962,1,0.1
-ETHUSD,SELL,backtest_mtf,4h,1h,2026-03-08 12:00:00+00:00,1945.65,2026-03-13 08:00:00+00:00,2099.45,opposite_signal,-153.8,-7.9048,-8.0048,1,0.1
-ETHUSD,BUY,backtest_mtf,4h,1h,2026-03-13 08:00:00+00:00,2099.45,2026-03-29 04:00:00+00:00,2005.35,opposite_signal,-94.1,-4.4821,-4.5821,1,0.1
-ETHUSD,SELL,backtest_mtf,4h,1h,2026-03-29 04:00:00+00:00,2005.35,2026-04-06 16:00:00+00:00,2139.75,opposite_signal,-134.4,-6.7021,-6.8021,1,0.1
-ETHUSD,BUY,backtest_mtf,4h,1h,2026-04-06 16:00:00+00:00,2139.75,2026-05-08 16:00:00+00:00,2289.6,end_of_data,149.85,7.0032,6.9032,1,0.1

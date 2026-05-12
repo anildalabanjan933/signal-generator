@@ -1,6 +1,0 @@
-symbol,side,system,trend_tf,trigger_tf,entry_time,entry_price,exit_time,exit_price,exit_reason,pnl_points,pnl_pct,pnl_pct_net,lot_size,fee_pct_rt
-ETHUSD,BUY,swing_4h_1h,4h,1h,2024-10-01 01:00:00+00:00,2622.65,2024-10-01 02:00:00+00:00,2620.4,supertrend_flip,-2.25,-0.0858,-0.0868,100,0.001
-ETHUSD,BUY,swing_4h_1h,4h,1h,2024-10-01 03:00:00+00:00,2630.5,2024-10-01 04:00:00+00:00,2645.05,supertrend_flip,14.55,0.5531,0.5521,100,0.001
-ETHUSD,SELL,swing_4h_1h,4h,1h,2025-02-13 07:00:00+00:00,2680.25,2025-02-13 08:00:00+00:00,2665.6,supertrend_flip,14.65,0.5466,0.5456,100,0.001
-ETHUSD,SELL,swing_4h_1h,4h,1h,2025-04-02 20:00:00+00:00,1879.15,2025-04-02 21:00:00+00:00,1866.75,supertrend_flip,12.4,0.6599,0.6589,100,0.001
-ETHUSD,SELL,swing_4h_1h,4h,1h,2025-12-21 21:00:00+00:00,2973.15,2025-12-22 00:00:00+00:00,3021.5,supertrend_flip,-48.35,-1.6262,-1.6272,100,0.001

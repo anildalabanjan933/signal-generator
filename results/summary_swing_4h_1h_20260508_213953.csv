@@ -1,3 +1,0 @@
-symbol,total_trades,win_rate_pct,profit_factor,total_pnl_pct,total_pnl_pct_net,max_drawdown_pct,avg_win_pct,avg_loss_pct,best_trade_pct,worst_trade_pct,avg_trade_pct,total_trades_buy,total_trades_sell,win_streak_max,loss_streak_max
-BTCUSD,5,20.0,0.367,-20.2256,-20.7256,26.9808,11.9913,-8.1792,11.9913,-9.6787,-4.1451,3,2,1,4
-ETHUSD,8,12.5,0.171,-32.8724,-33.6724,38.5797,6.9289,-5.8002,6.9289,-8.1962,-4.2091,4,4,1,7

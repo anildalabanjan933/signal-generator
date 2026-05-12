@@ -1,5 +1,0 @@
-mode,label,symbol,trend_tf,trigger_tf,exit_mode,total_trades,win_rate_pct,profit_factor,total_pnl_pct,max_drawdown_pct,avg_win_pct,avg_loss_pct,best_trade_pct,worst_trade_pct,avg_trade_pct,total_trades_buy,total_trades_sell,win_streak_max,loss_streak_max,grade,total_pnl_pct_net
-swing,swing_4h_1h,BTCUSD,4h,1h,opposite_signal,5,20.0,0.362,-20.1423,26.3021,11.7285,-8.0927,11.7285,-9.3703,-4.1285,3,2,1,4,F,-20.6423
-swing,swing_4h_1h,ETHUSD,4h,1h,opposite_signal,6,16.67,0.198,-24.2551,28.4602,6.1274,-6.1965,6.1274,-9.0712,-4.1425,3,3,1,5,F,-24.8551
-intraday,intraday_1h_15m,BTCUSD,1h,15m,opposite_signal,16,18.75,0.343,-21.7478,28.5679,4.068,-2.7348,10.4013,-5.8616,-1.4592,8,8,2,10,F,-23.3478
-intraday,intraday_1h_15m,ETHUSD,1h,15m,opposite_signal,19,15.79,0.196,-49.1477,54.8058,4.152,-3.969,7.292,-10.6396,-2.6867,9,10,1,9,F,-51.0477
