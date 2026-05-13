@@ -2,30 +2,40 @@
 # live_runner.py  -  futures_2h_30m strategy
 # ============================================================
 # Timeframe structure:
-#   2H candles  ->  trend direction (EMA9/EMA21 + Supertrend)
-#   30M candles ->  entry signal    (RSI cross, EMA, Supertrend exit)
+#   2H candles  ->  trend direction
+#   30M candles ->  entry signal
 #
-# FIXES APPLIED:
-#   F1 - get_signal() signal checks corrected to uppercase.
-#        "buy"/"sell"/"exit_buy"/"exit_sell" were lowercase.
-#        strategy.py was fixed to emit uppercase signals.
-#        live_runner must match. Mismatch caused zero executions.
-#   F2 - exit_signal separate column removed from get_signal().
-#        strategy.py fix merged exit_signal into signal column.
-#        Reading latest_row["exit_signal"] would throw KeyError.
-#        Now only signal column is read. EXIT_BUY/EXIT_SELL
-#        arrive in signal column directly.
-#   F3 - fillna(method="ffill") replaced with ffill().
-#        pandas deprecated the method= argument.
-#        Use df.ffill() directly to avoid FutureWarning.
-#   F4 - guard and allocator moved to module level.
-#        Were inside run_live_scanner() only.
-#        run_once() needs access to same instances so
-#        daily PnL and active trade count persist across
-#        calls from scanner.py coordinator.
+# FIXES APPLIED (this session):
+#   F6 - apply_indicators() now computes ema50 and ema200
+#        instead of ema_fast (EMA9) and ema_slow (EMA21).
+#        strategy.py expects ema50/ema200 column names.
+#        ema_fast/ema_slow caused KeyError in strategy.
+#
+#   F7 - apply_indicators() now computes ADX (14-period).
+#        ADX was not computed at all previously.
+#        Trend filter requires ADX > 20 to confirm
+#        directional momentum. Without ADX the bot was
+#        taking signals in ranging/sideways markets.
+#
+#   F8 - get_2h_trend() now uses all 4 backtest conditions:
+#        BULL: ema50 > ema200 AND supertrend_bull AND
+#              adx > 20 AND rsi > 60
+#        BEAR: ema50 < ema200 AND NOT supertrend_bull AND
+#              adx > 20 AND rsi < 40
+#        NONE: conditions not met — no trade allowed
+#        Previously only ema_fast > ema_slow was checked.
+#        Supertrend, ADX, and RSI were all ignored.
+#
+#   F9 - trend_aligned now carries "bull"/"bear"/None.
+#        generate_signals() in strategy.py already handles
+#        None as no-trade. No change needed in strategy.
+#
+# FIXES FROM PREVIOUS SESSION (retained):
+#   F1 - Signal comparisons corrected to uppercase.
+#   F2 - exit_signal separate column removed.
+#   F3 - ffill() replaces deprecated fillna(method="ffill").
+#   F4 - guard and allocator at module level.
 #   F5 - run_once() added for scanner.py coordinator.
-#        scanner.py calls run_once() on a schedule.
-#        run_live_scanner() kept for standalone use.
 # ============================================================
 
 import sys
@@ -94,8 +104,6 @@ last_signal_map = {}
 
 # ============================================================
 # F4: MODULE-LEVEL RISK INSTANCES
-# State must persist across run_once() calls so daily PnL
-# and active trade count are not reset on every scan cycle.
 # ============================================================
 guard     = DailyGuard()
 allocator = TradeAllocator()
@@ -160,11 +168,18 @@ def fetch_candles(
 
 # ============================================================
 # INDICATORS
+# F6: ema_fast/ema_slow replaced with ema50/ema200.
+# F7: ADX (14-period) added. Required for trend filter.
+#
+# This function is called on BOTH the 30M entry dataframe
+# and the 2H trend dataframe. All columns are computed
+# on both so the trend builder can access rsi, adx,
+# ema50, ema200, supertrend_bull on the 2H dataframe.
 # ============================================================
 
 def apply_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
-    # ---- RSI ----
+    # ---- RSI (14-period) ----
     delta_close = df["close"].diff()
     gain        = delta_close.clip(lower=0)
     loss        = -delta_close.clip(upper=0)
@@ -173,24 +188,56 @@ def apply_indicators(df: pd.DataFrame) -> pd.DataFrame:
     rs          = avg_gain / avg_loss
     df["rsi"]   = 100 - (100 / (1 + rs))
 
-    # ---- EMA ----
-    df["ema_fast"] = df["close"].ewm(span=9,  adjust=False).mean()
-    df["ema_slow"] = df["close"].ewm(span=21, adjust=False).mean()
+    # ---- EMA50 and EMA200 ----
+    # F6: Replaces ema_fast (EMA9) and ema_slow (EMA21).
+    # Backtest used EMA50/EMA200 for trend and entry.
+    df["ema50"]  = df["close"].ewm(span=50,  adjust=False).mean()
+    df["ema200"] = df["close"].ewm(span=200, adjust=False).mean()
 
-    # ---- Supertrend ----
+    # ---- ADX (14-period) ----
+    # F7: ADX was missing entirely. Required for trend filter.
+    # Standard Wilder ADX calculation.
+    high        = df["high"]
+    low         = df["low"]
+    close       = df["close"]
+
+    plus_dm     = high.diff()
+    minus_dm    = low.diff().abs()
+
+    plus_dm     = plus_dm.where(
+        (plus_dm > minus_dm) & (plus_dm > 0), 0.0
+    )
+    minus_dm    = minus_dm.where(
+        (minus_dm > plus_dm.abs()) & (minus_dm > 0), 0.0
+    )
+
+    high_low    = high - low
+    high_close  = (high - close.shift()).abs()
+    low_close   = (low  - close.shift()).abs()
+
+    tr          = pd.concat(
+        [high_low, high_close, low_close], axis=1
+    ).max(axis=1)
+
+    atr14       = tr.ewm(span=14, adjust=False).mean()
+    plus_di     = 100 * (plus_dm.ewm(span=14, adjust=False).mean()  / atr14)
+    minus_di    = 100 * (minus_dm.ewm(span=14, adjust=False).mean() / atr14)
+
+    dx          = (
+        (plus_di - minus_di).abs() /
+        (plus_di + minus_di).abs()
+    ) * 100
+
+    df["adx"]   = dx.ewm(span=14, adjust=False).mean()
+
+    # ---- Supertrend (ATR 10, multiplier 3.0) ----
     atr_period     = 10
     atr_multiplier = 3.0
 
-    high_low   = df["high"] - df["low"]
-    high_close = (df["high"] - df["close"].shift()).abs()
-    low_close  = (df["low"]  - df["close"].shift()).abs()
-
-    tr  = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    atr = tr.ewm(span=atr_period, adjust=False).mean()
-
     hl2        = (df["high"] + df["low"]) / 2
-    upper_band = hl2 + (atr_multiplier * atr)
-    lower_band = hl2 - (atr_multiplier * atr)
+    atr_st     = tr.ewm(span=atr_period, adjust=False).mean()
+    upper_band = hl2 + (atr_multiplier * atr_st)
+    lower_band = hl2 - (atr_multiplier * atr_st)
 
     supertrend = [True] * len(df)
 
@@ -208,6 +255,22 @@ def apply_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 # ============================================================
 # 2H TREND BUILDER
+# F8: All 4 backtest trend conditions now applied.
+#
+# BULL trend requires ALL of:
+#   - ema50 > ema200       (long-term uptrend)
+#   - supertrend_bull      (price above supertrend)
+#   - adx > 20             (directional momentum present)
+#   - rsi > 60             (strong bullish momentum)
+#
+# BEAR trend requires ALL of:
+#   - ema50 < ema200       (long-term downtrend)
+#   - NOT supertrend_bull  (price below supertrend)
+#   - adx > 20             (directional momentum present)
+#   - rsi < 40             (strong bearish momentum)
+#
+# If neither condition is fully met, trend = None.
+# generate_signals() treats None as no-trade.
 # ============================================================
 
 def get_2h_trend(symbol: str, df_30m: pd.DataFrame) -> pd.Series:
@@ -215,10 +278,27 @@ def get_2h_trend(symbol: str, df_30m: pd.DataFrame) -> pd.Series:
     df_2h = fetch_candles(symbol, resolution=RESOLUTION_TREND, limit=CANDLE_LIMIT)
     df_2h = apply_indicators(df_2h)
 
-    df_2h["trend"] = df_2h.apply(
-        lambda row: "bull" if row["ema_fast"] > row["ema_slow"] else "bear",
-        axis=1
-    )
+    # F8: All 4 conditions evaluated per row
+    def classify_trend(row):
+        bull = (
+            row["ema50"]  > row["ema200"] and
+            bool(row["supertrend_bull"])  and
+            row["adx"]    > 20            and
+            row["rsi"]    > 60
+        )
+        bear = (
+            row["ema50"]  < row["ema200"] and
+            not bool(row["supertrend_bull"]) and
+            row["adx"]    > 20            and
+            row["rsi"]    < 40
+        )
+        if bull:
+            return "bull"
+        if bear:
+            return "bear"
+        return None
+
+    df_2h["trend"] = df_2h.apply(classify_trend, axis=1)
 
     df_2h_trend = df_2h[["timestamp", "trend"]].copy()
     df_30m_ts   = df_30m[["timestamp"]].copy()
@@ -230,8 +310,9 @@ def get_2h_trend(symbol: str, df_30m: pd.DataFrame) -> pd.Series:
         direction="backward"
     )
 
-    # F3: replaced fillna(method="ffill") with ffill()
-    merged["trend"] = merged["trend"].ffill().fillna("bear")
+    # F3: ffill() — carry last known trend forward.
+    # None values that were never set remain None (no trade).
+    merged["trend"] = merged["trend"].ffill()
 
     trend_series = pd.Series(
         merged["trend"].values,
@@ -249,11 +330,6 @@ def get_signal(symbol: str):
     Fetch 2H and 30M candles, apply indicators,
     build 2H trend alignment, generate signals.
     Returns (signal_string, latest_price).
-
-    F1: All signal comparisons corrected to uppercase.
-        strategy.py emits BUY/SELL/EXIT_BUY/EXIT_SELL.
-    F2: exit_signal column removed. EXIT_BUY and EXIT_SELL
-        now arrive in the signal column directly.
     """
 
     df_30m = fetch_candles(symbol, resolution=RESOLUTION_ENTRY, limit=CANDLE_LIMIT)
@@ -264,10 +340,9 @@ def get_signal(symbol: str):
     result_df = generate_signals(df_30m, trend_aligned)
 
     latest_row   = result_df.iloc[-1]
-    signal       = latest_row["signal"]      # F2: single column only
+    signal       = latest_row["signal"]
     latest_price = df_30m["close"].iloc[-1]
 
-    # F1: all comparisons uppercase to match strategy.py output
     if signal == "EXIT_BUY":
         return "EXIT_BUY", latest_price
 
@@ -284,8 +359,6 @@ def get_signal(symbol: str):
 
 # ============================================================
 # SINGLE SCAN CYCLE
-# F5: Called by scanner.py coordinator on schedule.
-#     No loop, no sleep. Scans all symbols once and returns.
 # ============================================================
 
 def run_once():
@@ -357,8 +430,6 @@ def run_once():
 
 # ============================================================
 # STANDALONE LOOP
-# Kept for running this file directly.
-# scanner.py uses run_once() instead.
 # ============================================================
 
 def run_live_scanner():
