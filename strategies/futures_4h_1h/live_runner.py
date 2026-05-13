@@ -6,28 +6,10 @@
 #   1H candles  ->  entry signal
 #
 # FIXES APPLIED (this session):
-#   F6 - apply_indicators() now computes ema50 and ema200
-#        instead of ema_fast (EMA9) and ema_slow (EMA21).
-#        strategy.py expects ema50/ema200 column names.
-#        ema_fast/ema_slow caused KeyError in strategy.
-#
+#   F6 - apply_indicators() now computes ema50 and ema200.
 #   F7 - apply_indicators() now computes ADX (14-period).
-#        ADX was not computed at all previously.
-#        Trend filter requires ADX > 20 to confirm
-#        directional momentum.
-#
-#   F8 - get_4h_trend() now uses all 4 backtest conditions:
-#        BULL: ema50 > ema200 AND supertrend_bull AND
-#              adx > 20 AND rsi > 60
-#        BEAR: ema50 < ema200 AND NOT supertrend_bull AND
-#              adx > 20 AND rsi < 40
-#        NONE: conditions not met — no trade allowed
-#        Previously only ema_fast > ema_slow was checked.
-#        Supertrend, ADX, and RSI were all ignored.
-#
+#   F8 - get_4h_trend() now uses all 4 backtest conditions.
 #   F9 - trend_aligned now carries "bull"/"bear"/None.
-#        generate_signals() in strategy.py handles
-#        None as no-trade.
 #
 # FIXES FROM PREVIOUS SESSION (retained):
 #   F1 - Signal comparisons corrected to uppercase.
@@ -35,6 +17,15 @@
 #   F3 - ffill() replaces deprecated fillna(method="ffill").
 #   F4 - guard and allocator at module level.
 #   F5 - run_once() added for scanner.py coordinator.
+#
+# FIX THIS SESSION:
+#   F10 - run_once() now accepts guard and allocator as
+#         parameters injected from scanner.py.
+#         Module-level instances kept as fallback for
+#         standalone execution only (__main__).
+#
+#   F11 - Price validation added before calculate_position_size.
+#         Prevents silent 1-lot fallback from NaN price.
 # ============================================================
 
 import sys
@@ -102,10 +93,13 @@ RESOLUTION_SECONDS = {
 last_signal_map = {}
 
 # ============================================================
-# F4: MODULE-LEVEL RISK INSTANCES
+# F4 / F10: MODULE-LEVEL FALLBACK INSTANCES
+# Used ONLY when this file is run directly as __main__.
+# When called from scanner.py, shared instances are
+# passed in via run_once(guard, allocator) parameters.
 # ============================================================
-guard     = DailyGuard()
-allocator = TradeAllocator()
+_fallback_guard     = DailyGuard()
+_fallback_allocator = TradeAllocator()
 
 # ============================================================
 # LIVE CANDLE FETCHER
@@ -167,11 +161,6 @@ def fetch_candles(
 
 # ============================================================
 # INDICATORS
-# F6: ema_fast/ema_slow replaced with ema50/ema200.
-# F7: ADX (14-period) added. Required for trend filter.
-#
-# Called on BOTH the 1H entry dataframe and the 4H trend
-# dataframe so all columns are available on both.
 # ============================================================
 
 def apply_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -186,44 +175,42 @@ def apply_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["rsi"]   = 100 - (100 / (1 + rs))
 
     # ---- EMA50 and EMA200 ----
-    # F6: Replaces ema_fast (EMA9) and ema_slow (EMA21).
     df["ema50"]  = df["close"].ewm(span=50,  adjust=False).mean()
     df["ema200"] = df["close"].ewm(span=200, adjust=False).mean()
 
     # ---- ADX (14-period) ----
-    # F7: ADX was missing entirely. Required for trend filter.
-    high        = df["high"]
-    low         = df["low"]
-    close       = df["close"]
+    high     = df["high"]
+    low      = df["low"]
+    close    = df["close"]
 
-    plus_dm     = high.diff()
-    minus_dm    = low.diff().abs()
+    plus_dm  = high.diff()
+    minus_dm = low.diff().abs()
 
-    plus_dm     = plus_dm.where(
+    plus_dm  = plus_dm.where(
         (plus_dm > minus_dm) & (plus_dm > 0), 0.0
     )
-    minus_dm    = minus_dm.where(
+    minus_dm = minus_dm.where(
         (minus_dm > plus_dm.abs()) & (minus_dm > 0), 0.0
     )
 
-    high_low    = high - low
-    high_close  = (high - close.shift()).abs()
-    low_close   = (low  - close.shift()).abs()
+    high_low   = high - low
+    high_close = (high - close.shift()).abs()
+    low_close  = (low  - close.shift()).abs()
 
-    tr          = pd.concat(
+    tr         = pd.concat(
         [high_low, high_close, low_close], axis=1
     ).max(axis=1)
 
-    atr14       = tr.ewm(span=14, adjust=False).mean()
-    plus_di     = 100 * (plus_dm.ewm(span=14, adjust=False).mean()  / atr14)
-    minus_di    = 100 * (minus_dm.ewm(span=14, adjust=False).mean() / atr14)
+    atr14      = tr.ewm(span=14, adjust=False).mean()
+    plus_di    = 100 * (plus_dm.ewm(span=14, adjust=False).mean()  / atr14)
+    minus_di   = 100 * (minus_dm.ewm(span=14, adjust=False).mean() / atr14)
 
-    dx          = (
+    dx         = (
         (plus_di - minus_di).abs() /
         (plus_di + minus_di).abs()
     ) * 100
 
-    df["adx"]   = dx.ewm(span=14, adjust=False).mean()
+    df["adx"]  = dx.ewm(span=14, adjust=False).mean()
 
     # ---- Supertrend (ATR 10, multiplier 3.0) ----
     atr_period     = 10
@@ -250,22 +237,6 @@ def apply_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 # ============================================================
 # 4H TREND BUILDER
-# F8: All 4 backtest trend conditions now applied.
-#
-# BULL trend requires ALL of:
-#   - ema50 > ema200       (long-term uptrend)
-#   - supertrend_bull      (price above supertrend)
-#   - adx > 20             (directional momentum present)
-#   - rsi > 60             (strong bullish momentum)
-#
-# BEAR trend requires ALL of:
-#   - ema50 < ema200       (long-term downtrend)
-#   - NOT supertrend_bull  (price below supertrend)
-#   - adx > 20             (directional momentum present)
-#   - rsi < 40             (strong bearish momentum)
-#
-# If neither condition is fully met, trend = None.
-# generate_signals() treats None as no-trade.
 # ============================================================
 
 def get_4h_trend(symbol: str, df_1h: pd.DataFrame) -> pd.Series:
@@ -273,18 +244,17 @@ def get_4h_trend(symbol: str, df_1h: pd.DataFrame) -> pd.Series:
     df_4h = fetch_candles(symbol, resolution=RESOLUTION_TREND, limit=CANDLE_LIMIT)
     df_4h = apply_indicators(df_4h)
 
-    # F8: All 4 conditions evaluated per row
     def classify_trend(row):
         bull = (
-            row["ema50"]  > row["ema200"] and
-            bool(row["supertrend_bull"])  and
-            row["adx"]    > 20            and
+            row["ema50"]  > row["ema200"]       and
+            bool(row["supertrend_bull"])         and
+            row["adx"]    > 20                  and
             row["rsi"]    > 60
         )
         bear = (
-            row["ema50"]  < row["ema200"]    and
-            not bool(row["supertrend_bull"]) and
-            row["adx"]    > 20               and
+            row["ema50"]  < row["ema200"]          and
+            not bool(row["supertrend_bull"])        and
+            row["adx"]    > 20                     and
             row["rsi"]    < 40
         )
         if bull:
@@ -305,8 +275,6 @@ def get_4h_trend(symbol: str, df_1h: pd.DataFrame) -> pd.Series:
         direction="backward"
     )
 
-    # F3: ffill() — carry last known trend forward.
-    # None values that were never set remain None (no trade).
     merged["trend"] = merged["trend"].ffill()
 
     trend_series = pd.Series(
@@ -340,13 +308,10 @@ def get_signal(symbol: str):
 
     if signal == "EXIT_BUY":
         return "EXIT_BUY", latest_price
-
     if signal == "EXIT_SELL":
         return "EXIT_SELL", latest_price
-
     if signal == "BUY":
         return "BUY", latest_price
-
     if signal == "SELL":
         return "SELL", latest_price
 
@@ -354,9 +319,19 @@ def get_signal(symbol: str):
 
 # ============================================================
 # SINGLE SCAN CYCLE
+# F10: Accepts guard and allocator as parameters.
+#      Falls back to module-level instances when run
+#      directly as __main__ (standalone mode).
 # ============================================================
 
-def run_once():
+def run_once(guard=None, allocator=None):
+
+    # F10: Use injected instances if provided by scanner.py.
+    # Use fallback instances if run standalone.
+    if guard is None:
+        guard = _fallback_guard
+    if allocator is None:
+        allocator = _fallback_allocator
 
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"\n[4H/1H | {current_time}] Scanning symbols...\n")
@@ -390,6 +365,13 @@ def run_once():
                 if not allocator.can_open_trade():
                     print(f"{symbol} -> Max trades reached")
                     continue
+
+            # F11: Validate price before position sizing.
+            # Prevents NaN or zero price causing silent 1-lot fallback.
+            import math
+            if latest_price is None or latest_price <= 0 or math.isnan(latest_price):
+                print(f"{symbol} -> Invalid price {latest_price}, skipping")
+                continue
 
             size = calculate_position_size(symbol, latest_price)
 
