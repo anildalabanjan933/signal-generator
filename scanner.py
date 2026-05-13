@@ -50,12 +50,41 @@
 #        Fix: one shared allocator and one shared guard
 #        passed into both run_once() calls so both
 #        strategies see the same state at all times.
+#
+#   F10 - GAP 4 FIX: Startup position reconciliation.
+#         On every process start (including Railway
+#         auto-restarts), shared_allocator starts empty.
+#         If the bot restarts mid-trade, it does not know
+#         about existing open positions on the exchange.
+#         The next scan cycle sees an empty allocator and
+#         opens the same symbol again — doubling exposure.
+#
+#         Fix: _reconcile_open_positions() is called once
+#         at module load time (after shared_allocator is
+#         created). It calls GET /v2/positions/margined,
+#         reads all currently open perpetual futures
+#         positions, and calls register_trade(symbol) for
+#         each open symbol before the first scan runs.
+#
+#         This means:
+#           - Bot restarts mid-trade on BTCUSD
+#           - Reconciliation finds BTCUSD already open
+#           - Calls register_trade("BTCUSD") on allocator
+#           - First scan sees BTCUSD as already allocated
+#           - Does NOT open a second BTCUSD position
+#
+#         If the API call fails at startup (network issue),
+#         the error is logged as WARNING and the bot
+#         continues. Allocator starts empty in that case —
+#         same behaviour as before this fix. Operator is
+#         warned via log so they can investigate.
 # =====================================================
 
 import logging
 
 from risk.daily_guard import DailyGuard
 from risk.trade_allocator import TradeAllocator
+from execution.demo_executor import get_open_positions
 
 import strategies.futures_4h_1h.live_runner as runner_4h_1h
 import strategies.futures_2h_30m.live_runner as runner_2h_30m
@@ -71,6 +100,84 @@ shared_allocator = TradeAllocator()
 
 log = logging.getLogger(__name__)
 
+
+# ============================================================
+# F10: GAP 4 — STARTUP POSITION RECONCILIATION
+# ============================================================
+
+def _reconcile_open_positions() -> None:
+    """
+    On startup, fetch all open positions from the exchange
+    and pre-fill shared_allocator via register_trade() so
+    the bot does not open duplicate positions after a restart.
+
+    Called once at module load time — before the first
+    run_scanner() call.
+
+    If the API call fails at startup, the error is logged
+    as WARNING and the bot continues with an empty allocator.
+    This is the same behaviour as before this fix was added.
+    A warning is logged so the operator is aware.
+    """
+    log.info("Startup reconciliation: checking for existing open positions...")
+
+    try:
+        open_positions = get_open_positions()
+
+        if not open_positions:
+            log.info(
+                "Startup reconciliation: no open positions found. "
+                "Allocator starts clean."
+            )
+            return
+
+        reconciled = []
+
+        for pos in open_positions:
+            symbol = pos.get("product_symbol")
+            size   = pos.get("size", 0)
+
+            # Only register positions with a non-zero size.
+            # size > 0 = long, size < 0 = short, size = 0 = flat.
+            if symbol and size != 0:
+                shared_allocator.register_trade(symbol)
+                reconciled.append(symbol)
+                log.info(
+                    f"Startup reconciliation: registered existing position | "
+                    f"Symbol: {symbol} | Size: {size}"
+                )
+
+        if reconciled:
+            log.info(
+                f"Startup reconciliation complete. "
+                f"Pre-filled allocator with: {reconciled} | "
+                f"Active count: {shared_allocator.get_active_count()}"
+                f"/{shared_allocator.active_trades}"
+            )
+        else:
+            log.info(
+                "Startup reconciliation: positions returned but none "
+                "with non-zero size. Allocator starts clean."
+            )
+
+    except Exception as e:
+        log.warning(
+            f"Startup reconciliation FAILED — allocator starts empty. "
+            f"Risk of duplicate positions if bot restarted mid-trade. "
+            f"Error: {e}"
+        )
+
+
+# ============================================================
+# F10: Run reconciliation once at module load time.
+# Executes before the first run_scanner() call.
+# ============================================================
+_reconcile_open_positions()
+
+
+# ============================================================
+# SCANNER
+# ============================================================
 
 def run_scanner():
     """
