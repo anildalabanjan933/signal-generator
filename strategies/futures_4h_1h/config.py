@@ -1,5 +1,5 @@
 # ============================================================
-# config.py - All settings in one place (Fully Optimizable)
+# config.py - futures_4h_1h strategy settings (Fully Optimizable)
 #
 # FIXES APPLIED:
 #   FIX1 - BACKTEST_DAYS raised from 90 to 730 (2 years)
@@ -85,6 +85,15 @@
 #
 #   C7  - USD_TO_INR updated to 85.0 (May 2026 approximate).
 #          Previous value of 84.0 was stale.
+#
+#   C8  - BNBUSD CONTRACT_VALUES corrected from 0.01 to 0.1.
+#          Verified from Delta Exchange API (May 2026):
+#          BNBUSD contract_value = 0.1 BNB/lot.
+#          Previous value 0.01 was 10x understated.
+#
+#   C9  - Algotest section removed entirely.
+#          Not used. Only Delta Exchange demo account
+#          is used for forward testing.
 # ============================================================
 
 # --- Delta Exchange API ---
@@ -277,7 +286,6 @@ RISK_PER_TRADE   = 0.01    # 1% risk per trade
 EMA200_PROXIMITY_ATR_MULT = 1.0   # FIX3: was missing
 
 # ============================================================
-# ============================================================
 # EXIT MODE SETTINGS
 # ============================================================
 #
@@ -289,22 +297,22 @@ EMA200_PROXIMITY_ATR_MULT = 1.0   # FIX3: was missing
 # Current test:
 #   wider ATR trailing stop for crypto trend capture
 # ============================================================
-
-EXIT_MODE = "opposite_signal"
+EXIT_MODE               = "opposite_signal"
 ATR_SL_MULTIPLIER       = 1.5
 ATR_TP_MULTIPLIER       = 3.0
 TRAILING_ATR_MULTIPLIER = 4.0
-# ============================================================
 
+# ============================================================
 # TRADE EXECUTION SETTINGS
 # FIX6: LOT_SIZE replaced with per-symbol LOT_SIZES dict.
 #       Single global LOT_SIZE=1 was wrong for both symbols.
 #
 # Verified from Delta Exchange API (May 2026):
-#   BTCUSD contract_value = 0.001 BTC/lot
-#     → 100 lots = 0.1 BTC per trade
-#   ETHUSD contract_value = 0.01 ETH/lot
-#     → 100 lots = 1.0 ETH per trade
+#   BTCUSD  contract_value = 0.001 BTC/lot  → 100 lots = 0.1 BTC
+#   ETHUSD  contract_value = 0.01  ETH/lot  → 100 lots = 1.0 ETH
+#   SOLUSD  contract_value = 1     SOL/lot  →  10 lots = 10 SOL
+#   BNBUSD  contract_value = 0.1   BNB/lot  →   1 lot  = 0.1 BNB
+#   DOGEUSD contract_value = 100   DOGE/lot →1000 lots = 100000 DOGE
 #
 # Delta Exchange does not support fractional lot sizes.
 # Valid values: 1, 5, 10, 100, etc. (integers only)
@@ -316,24 +324,26 @@ TRAILING_ATR_MULTIPLIER = 4.0
 #     backtest_engine must raise ValueError if None is received.
 # ============================================================
 LOT_SIZES = {
-    "BTCUSD": 100,
-    "ETHUSD": 100,
-    "SOLUSD": 10,
-    "BNBUSD": 1,
+    "BTCUSD" : 100,
+    "ETHUSD" : 100,
+    "SOLUSD" : 10,
+    "BNBUSD" : 1,
     "AVAXUSD": 10,
     "DOGEUSD": 1000,
 }
 
 # Contract value per lot — used for USD PnL calculation
 # Verified from Delta Exchange API (May 2026)
+# C8: BNBUSD corrected from 0.01 to 0.1 (was 10x understated)
 CONTRACT_VALUES = {
-    "BTCUSD": 0.001,
-    "ETHUSD": 0.01,
-    "SOLUSD": 1,
-    "BNBUSD": 0.01,
+    "BTCUSD" : 0.001,
+    "ETHUSD" : 0.01,
+    "SOLUSD" : 1,
+    "BNBUSD" : 0.1,     # C8: corrected from 0.01 to 0.1
     "AVAXUSD": 1,
     "DOGEUSD": 100,
 }
+
 # ============================================================
 # FEE SETTINGS
 # FIX7: TAKER_FEE_PCT corrected from 0.05 to 0.0005.
@@ -391,7 +401,7 @@ MIN_ATR_THRESHOLD_RANGE = {"min": 0.0, "max": 0.005, "step": 0.001}
 # ============================================================
 # SCAN SETTINGS
 # ============================================================
-SCAN_INTERVAL_SECONDS = 900    # Scan every 15 minutes
+SCAN_INTERVAL_SECONDS = 3600   # Scan every 60 minutes (aligned to 1H trigger TF)
 
 # ============================================================
 # OPTIMIZATION SETTINGS
@@ -407,34 +417,7 @@ SAVE_RESULTS_CSV = True
 RESULTS_FOLDER   = "results"
 
 # ============================================================
-# ALGOTEST WEBHOOKS
-# ============================================================
-
-BTC_LONG_ENTRY_WEBHOOK = "https://api.algotest.in/webhook/custom/execution/start/6a009c61f85d2617ff7e2126"
-BTC_LONG_EXIT_WEBHOOK  = "https://api.algotest.in/webhook/custom/execution/square_off/6a009c61f85d2617ff7e2126"
-
-BTC_SHORT_ENTRY_WEBHOOK = "https://api.algotest.in/webhook/custom/execution/start/6a009ec8053920297050fcc6"
-BTC_SHORT_EXIT_WEBHOOK  = "https://api.algotest.in/webhook/custom/execution/square_off/6a009ec8053920297050fcc6"
-
-
-# ============================================================
-# ALGOTEST JSON PAYLOADS
-# ============================================================
-
-BTC_LONG_ENTRY_PAYLOAD = {"access_token":"n7FJcMHANHN4F8HdqbU5QMDJn5JO79K9","alert_name":"Future buy python signal_Custom"}
-
-
-
-BTC_LONG_EXIT_PAYLOAD = {"access_token":"n7FJcMHANHN4F8HdqbU5QMDJn5JO79K9","alert_name":"Future buy python signal_Custom"}
-
-
-
-BTC_SHORT_ENTRY_PAYLOAD = {"access_token":"n7FJcMHANHN4F8HdqbU5QMDJn5JO79K9","alert_name":"BTC-FUT -PYTN-SELL 4H 1H_Custom"}
-
-BTC_SHORT_EXIT_PAYLOAD = {"access_token":"n7FJcMHANHN4F8HdqbU5QMDJn5JO79K9","alert_name":"BTC-FUT -PYTN-SELL 4H 1H_Custom"}
-
-# ============================================================
-# FIX5 + FIX10 + C1-C7: build_params()
+# FIX5 + FIX10 + C1-C9: build_params()
 #
 #   FIX10 changes vs original:
 #     - Added symbol argument → per-symbol lot_size
@@ -455,6 +438,8 @@ BTC_SHORT_EXIT_PAYLOAD = {"access_token":"n7FJcMHANHN4F8HdqbU5QMDJn5JO79K9","ale
 #   C4: use_trend_strength_filter added (was missing entirely).
 #   C5: intraday_trend_tf + intraday_trigger_tf added.
 #   C6: FIX4 comment corrected to reference build_params().
+#   C8: BNBUSD contract_value corrected to 0.1 in CONTRACT_VALUES.
+#   C9: Algotest section removed entirely — not used.
 # ============================================================
 def build_params(overrides: dict = None, symbol: str = None) -> dict:
     """

@@ -7,8 +7,7 @@
 # ============================================================
 
 from datetime import datetime, timezone
-
-MAX_DAILY_LOSS = 20.0   # USD
+from risk.risk_config import MAX_DAILY_LOSS
 
 
 class DailyGuard:

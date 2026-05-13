@@ -1,131 +1,65 @@
 # =====================================================
-# scanner.py - Multi-coin scanner loop
+# scanner.py - Multi-strategy coordinator
+#
+# FIXES APPLIED:
+#   F1 - Removed "from config import ..." — no root
+#        config.py exists. Each strategy has its own.
+#   F2 - Removed duplicate build_params() — already
+#        defined in each strategy's config.py.
+#   F3 - Removed broken imports: signal_engine and
+#        data_fetcher do not exist in the file tree.
+#   F4 - scanner.py now calls each strategy's
+#        live_runner directly. Signal logic, candle
+#        fetch, indicator calc, and trend alignment
+#        all live inside the live_runners already.
+#        No duplication needed here.
+#   F5 - Added per-strategy error handling so one
+#        strategy crash does not stop the other.
+#   F6 - futures_2h_30m strategy added. Was missing
+#        entirely from the original scanner.
+#   F7 - Candle fetch reduced to last N candles only
+#        (handled inside each live_runner). Fetching
+#        730 days on every scan cycle is too slow.
 # =====================================================
 
-from core.data_fetcher import fetch_candles_by_days
-from core.indicators import add_all_indicators
-from strategies.futures_4h_1h.strategy import generate_signals
-from core.webhook_sender import *
+import logging
 
-from strategies.futures_4h_1h import config
-
-
-def build_params():
-    """Build indicator params dict from config defaults."""
-    return {
-        "ema_fast": config.EMA_FAST,
-        "ema_slow": config.EMA_SLOW,
-        "rsi_period": config.RSI_PERIOD,
-        "rsi_oversold": config.RSI_OVERSOLD,
-        "rsi_overbought": config.RSI_OVERBOUGHT,
-        "adx_period": config.ADX_PERIOD,
-        "adx_min_threshold": config.ADX_MIN_THRESHOLD,
-        "atr_period": config.ATR_PERIOD,
-        "atr_multiplier": config.ATR_MULTIPLIER,
-        "supertrend_period": config.SUPERTREND_PERIOD,
-        "supertrend_multiplier": config.SUPERTREND_MULTIPLIER,
-        "wt_channel_length": config.WT_CHANNEL_LENGTH,
-        "wt_average_length": config.WT_AVERAGE_LENGTH,
-        "wt_overbought": config.WT_OVERBOUGHT,
-        "wt_oversold": config.WT_OVERSOLD,
-        "chop_period": config.CHOP_PERIOD,
-        "chop_threshold": config.CHOP_THRESHOLD,
-    }
+log = logging.getLogger(__name__)
 
 
 def run_scanner():
+    """
+    Coordinator that runs both strategy live runners.
+    Each live_runner handles its own:
+      - candle fetch
+      - indicator calculation
+      - trend alignment
+      - signal generation
+      - risk checks (DailyGuard + TradeAllocator)
+      - order execution
+      - CSV logging
+    """
 
-    print("\n" + "=" * 55)
-    print("  SIGNAL SCANNER RUNNING")
-    print("=" * 55)
+    log.info("=" * 55)
+    log.info("  SIGNAL SCANNER RUNNING")
+    log.info("=" * 55)
 
-    params = build_params()
+    # ── Strategy 1: futures_4h_1h ─────────────────────────
+    try:
+        log.info("Running strategy: futures_4h_1h")
+        from strategies.futures_4h_1h.live_runner import run_once as run_4h_1h
+        run_4h_1h()
+    except Exception as e:
+        log.error(f"futures_4h_1h failed: {e}", exc_info=True)
 
-    for symbol in SYMBOLS:
+    # ── Strategy 2: futures_2h_30m ────────────────────────
+    try:
+        log.info("Running strategy: futures_2h_30m")
+        from strategies.futures_2h_30m.live_runner import run_once as run_2h_30m
+        run_2h_30m()
+    except Exception as e:
+        log.error(f"futures_2h_30m failed: {e}", exc_info=True)
 
-        print(f"\n  Scanning: {symbol}")
-        print("  " + "-" * 40)
-
-        # =========================================
-        # FETCH TIMEFRAMES
-        # =========================================
-
-        df_4h = add_all_indicators(
-            fetch_candles_by_days(symbol, "4h", days=BACKTEST_DAYS),
-            params
-        )
-
-        df_1h = add_all_indicators(
-            fetch_candles_by_days(symbol, "1h", days=BACKTEST_DAYS),
-            params
-        )
-
-        df_15m = add_all_indicators(
-            fetch_candles_by_days(symbol, "15m", days=BACKTEST_DAYS),
-            params
-        )
-
-        print("  Scanner running...")
-        print(f"  4H candles  : {len(df_4h)}")
-        print(f"  1H candles  : {len(df_1h)}")
-        print(f"  15M candles : {len(df_15m)}")
-
-        # =========================================
-        # GENERATE SIGNALS
-        # =========================================
-
-        signals_df = generate_signals(
-            df_1h,
-            trend_aligned=True,
-        )
-
-        # =========================================
-        # LATEST SIGNAL
-        # =========================================
-
-        latest = signals_df.iloc[-1]
-
-        signal = latest.get("signal")
-
-        # =========================================
-        # SIGNAL ROUTING
-        # =========================================
-
-        if signal:
-
-            signal = signal.upper()
-
-            print(f"  SIGNAL : {symbol} -> {signal}")
-
-            # =====================================
-            # BTC ROUTING
-            # =====================================
-
-            if symbol == "BTCUSD":
-
-                if signal == "BUY":
-
-                    print("  Sending BTC LONG ENTRY...")
-                    send_btc_long_entry()
-
-                elif signal == "SELL":
-
-                    print("  Sending BTC SHORT ENTRY...")
-                    send_btc_short_entry()
-
-        else:
-
-            print(f"  SIGNAL : {symbol} -> NO SIGNAL")
-
-    print("\n" + "=" * 55)
-    print("  SCAN COMPLETE")
-    print("=" * 55)
-
-
-# =====================================================
-# MAIN
-# =====================================================
-
-if __name__ == "__main__":
-
-    run_scanner()
+    log.info("=" * 55)
+    log.info("  SCAN COMPLETE")
+    log.info("=" * 55)
