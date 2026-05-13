@@ -80,8 +80,8 @@ DEMO_BASE_URL = "https://cdn-ind.testnet.deltaex.org"
 # Never hardcode credentials in source code.
 # Set DEMO_API_KEY and DEMO_API_SECRET in your .env file
 # or Railway environment settings.
-DEMO_API_KEY    = os.environ.get("To84nCnFuwhFh1w6c0QQmwyZTmk1KR", "")
-DEMO_API_SECRET = os.environ.get("2b7YvlMfj9lhdeIfXxZ1QQf4h8xu5sSifnWkb4vsjondFgssGnMgJikiC7OA", "")
+DEMO_API_KEY    = os.environ.get("DEMO_API_KEY", "")
+DEMO_API_SECRET = os.environ.get("DEMO_API_SECRET", "")
 
 if not DEMO_API_KEY or not DEMO_API_SECRET:
     raise EnvironmentError(
